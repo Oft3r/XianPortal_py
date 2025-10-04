@@ -9,28 +9,23 @@ from src.ui.ui_utils import create_round_rect, lerp_color
 
 
 class TokenDetailsScreen:
-    def __init__(self, master: 'WalletUI', token_data: 'TokenRow'):
+    def __init__(self, master: 'WalletUI', parent, token_data: 'TokenRow', on_back=None):
         self.master = master
+        self.parent = parent
         self.token_data = token_data
-        self.window = tk.Toplevel(master)
-        self.window.title(f"{token_data['name']} Details")
-        self.window.configure(bg="#0b1417")
-        self.window.transient(master)
-        self.window.grab_set()
+        self.on_back = on_back
+
+        # Frame for the details
+        self.frame = tk.Frame(parent, bg="#0b1417")
+        self.frame.pack(fill=tk.BOTH, expand=True)
 
         # Window size - similar to main app
         self.WIDTH = 360
         self.HEIGHT = 500
 
-        # Position the window at the same location as the main window
-        main_x = master.winfo_x()
-        main_y = master.winfo_y()
-        self.window.geometry(f"{self.WIDTH}x{self.HEIGHT}+{main_x}+{main_y}")
-        self.window.resizable(False, False)
-
         # Canvas for custom drawing
-        self.canvas = tk.Canvas(self.window, width=self.WIDTH, height=self.HEIGHT,
-                               bg="#0b1417", highlightthickness=0)
+        self.canvas = tk.Canvas(self.frame, width=self.WIDTH, height=self.HEIGHT,
+                                bg="#0b1417", highlightthickness=0)
         self.canvas.pack(fill=tk.BOTH, expand=True)
 
         # Hit areas for buttons
@@ -79,8 +74,8 @@ class TokenDetailsScreen:
 
         # Back button (simple arrow)
         c.create_text(pad, top + 20, text="←", fill="#9ac6cc", font=("Segoe UI", 16), anchor="w")
-        # Store hit area for back button (though not implemented yet)
-        # self.hit_areas['back'] = [{'x1': pad-5, 'y1': top+5, 'x2': pad+25, 'y2': top+35}]
+        # Store hit area for back button
+        self.hit_areas['back'] = [{'x1': pad-5, 'y1': top+5, 'x2': pad+25, 'y2': top+35}]
 
         # Token icon in center
         icon_size = 40
@@ -177,6 +172,12 @@ class TokenDetailsScreen:
     def _on_click(self, e):
         x, y = e.x, e.y
 
+        # Check back button
+        for rect in self.hit_areas.get('back', []):
+            if rect['x1'] <= x <= rect['x2'] and rect['y1'] <= y <= rect['y2']:
+                self._handle_action('back')
+                return
+
         # Check action buttons
         for action in ['send', 'receive', 'swap']:
             for rect in self.hit_areas.get(action, []):
@@ -191,7 +192,10 @@ class TokenDetailsScreen:
                 return
 
     def _handle_action(self, action: str):
-        if action == 'send':
+        if action == 'back':
+            if self.on_back:
+                self.on_back()
+        elif action == 'send':
             self._send_token()
         elif action == 'receive':
             self._receive_token()
@@ -207,8 +211,8 @@ class TokenDetailsScreen:
         if self.master.current_wallet:
             address = self.master.current_wallet.public_key
             try:
-                self.window.clipboard_clear()
-                self.window.clipboard_append(address)
+                self.master.clipboard_clear()
+                self.master.clipboard_append(address)
             except Exception:
                 pass
             messagebox.showinfo("Receive Address", f"Your receiving address:\n{address}\n\n(Copied to clipboard)")
@@ -222,8 +226,8 @@ class TokenDetailsScreen:
     def _copy_contract(self):
         contract = self.token_data.get("contract", "")
         try:
-            self.window.clipboard_clear()
-            self.window.clipboard_append(contract)
+            self.master.clipboard_clear()
+            self.master.clipboard_append(contract)
         except Exception:
             pass
         messagebox.showinfo("Copied", f"Contract address copied:\n{contract}")

@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import messagebox, simpledialog, filedialog
+from tkinter import ttk
 import threading
 from typing import Optional, List, Dict, TypedDict, Union
 
@@ -94,6 +95,8 @@ class WalletUI(tk.Tk):
         self.system_tray = SystemTray(window=self, on_show=self._on_tray_show, on_quit=self._on_tray_quit)
         self.bind("<Unmap>", self._on_unmap); self.protocol("WM_DELETE_WINDOW", self._on_tray_quit)
         self.canvas = tk.Canvas(self, width=self.WIDTH, height=self.HEIGHT, bg="#0b1417", highlightthickness=0); self.canvas.pack(fill=tk.BOTH, expand=True)
+        self.details_notebook = ttk.Notebook(self)
+        self.details_notebook.pack_forget()  # Hidden initially
         self.bind_all("<Control-n>", self._create_wallet); self.bind_all("<Control-i>", self._import_wallet)
         self.bind_all("<Control-u>", self._set_node_url)
         self.bind_all("<F5>", self._refresh_balances)
@@ -215,6 +218,29 @@ class WalletUI(tk.Tk):
 
         # Bottom nav
         self._draw_bottom_nav(c)
+
+    def show_token_details(self, token_data):
+        # Hide main canvas
+        self.canvas.pack_forget()
+        # Show notebook
+        self.details_notebook.pack(fill=tk.BOTH, expand=True)
+        # Create new tab
+        tab_frame = tk.Frame(self.details_notebook, bg="#0b1417")
+        self.details_notebook.add(tab_frame, text=f"{token_data['name']} Details")
+        # Create details screen in the tab
+        TokenDetailsScreen(self, tab_frame, token_data, on_back=self.back_to_main)
+        # Select the tab
+        self.details_notebook.select(tab_frame)
+
+    def back_to_main(self):
+        # Destroy all tabs
+        for tab_id in self.details_notebook.tabs():
+            self.details_notebook.forget(tab_id)
+        # Hide notebook
+        self.details_notebook.pack_forget()
+        # Show canvas
+        self.canvas.pack(fill=tk.BOTH, expand=True)
+        self.draw_ui()
 
     def _draw_vignette(self, c):
         # Simple vertical gradient by drawing horizontal lines
@@ -618,7 +644,7 @@ class WalletUI(tk.Tk):
                 token_idx = r.get('idx')
                 if token_idx is not None and 0 <= token_idx < len(self.tokens):
                     token_data = self.tokens[token_idx]
-                    TokenDetailsScreen(self, token_data)
+                    self.show_token_details(token_data)
                 return
 
     def _open_settings_dialog(self, _evt=None):
