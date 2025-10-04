@@ -13,6 +13,10 @@ cryptography>=41.0.0     # AES-GCM encryption for wallet data
 # tkinter is included with Python standard library on most platforms
 # On Linux, you may need to install: python3-tk
 
+# System Tray Support
+pystray>=0.19.0          # System tray icon support
+Pillow>=10.0.0           # Image processing for tray icons
+
 # Optional Dependencies
 # Uncomment if needed for specific features
 

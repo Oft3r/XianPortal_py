@@ -1,24 +1,8 @@
-"""
-Xian Portal - A professional wallet manager for the Xian blockchain network.
 
-This package provides a complete desktop application for managing Xian wallets
-with enterprise-grade security features, including cross-platform encrypted storage,
-HD wallet support, and an intuitive GUI interface.
 
-Modules:
-    ui: User interface components built with Tkinter
-    core: Core business logic and wallet management
-    storage: Secure data persistence and configuration management
-
-Usage:
-    from src.ui.wallet_ui import WalletUI
-
-    app = WalletUI()
-    app.mainloop()
-"""
 
 __version__ = "1.0.0"
-__author__ = "Xian Portal Team"
+__author__ = "Oft3r"
 __license__ = "MIT"
 
 # Package metadata

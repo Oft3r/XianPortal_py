@@ -7,8 +7,10 @@ A desktop wallet manager for the Xian blockchain network.
 - Create HD wallets with 24-word mnemonic phrases
 - Import wallets from mnemonic or private key
 - View token balances (XIAN and custom tokens)
+- Manage custom tokens (add, edit, remove via Token Manager dialog)
 - Secure encrypted storage (Windows DPAPI, macOS Keychain, Linux Secret Service)
 - Clean Tkinter interface with modern design
+- **System Tray Support** - Minimize wallet to system tray icon
 
 ## Installation
 
@@ -43,6 +45,19 @@ Or simply double-click `run.bat` in the project folder.
 - `Ctrl+U` - Set node URL
 - `F5` - Refresh balances
 
+### System Tray
+
+The wallet can be minimized to the system tray to keep it running in the background:
+
+1. Click the **Settings** icon (gear) in the bottom navigation
+2. In the "Window" section, click **Minimize to Tray**
+3. The wallet will minimize to your system tray
+4. **Right-click** the tray icon to see options:
+   - **Show Wallet** - Restore the wallet window
+   - **Quit** - Close the wallet completely
+
+**Note**: When minimized to tray, the wallet continues to run in the background. You can restore it anytime by clicking the tray icon.
+
 ## Security
 
 Your wallet is encrypted using:
@@ -60,9 +75,14 @@ Storage location:
 XianPortal_py/
 ├── xian_portal.py          # Main entry point - Run this!
 ├── src/
-│   ├── ui/                 # User interface
-│   ├── core/               # Wallet operations
-│   └── storage/            # Encrypted storage
+│   ├── ui/
+│   │   ├── wallet_ui.py    # Main wallet interface (Tkinter-based)
+│   │   └── system_tray.py  # System tray functionality
+│   ├── core/
+│   │   └── wallet_manager.py # Wallet creation/import/balances
+│   └── storage/
+│       ├── config_store.py # Token and configuration storage
+│       └── secure_store.py # Encrypted wallet storage
 └── scripts/                # Utility scripts
 ```
 
@@ -72,6 +92,8 @@ XianPortal_py/
 - xian-py (Xian network client)
 - keyring (recommended for cross-platform security)
 - cryptography (for AES-GCM encryption)
+- pystray (system tray icon support)
+- Pillow (image processing for tray icons)
 
 ## License
 

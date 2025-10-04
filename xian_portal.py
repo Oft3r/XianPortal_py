@@ -10,6 +10,8 @@ Usage:
     python xian_portal.py
 """
 
+
+
 import sys
 import os
 
@@ -19,8 +21,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from src.ui.wallet_ui import WalletUI
 
 
+
 def main():
-    """Initialize and run the Xian Portal application."""
+
     try:
         app = WalletUI()
         app.mainloop()

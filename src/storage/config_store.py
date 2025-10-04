@@ -1,4 +1,4 @@
-# JSON-based config store for custom tokens (English version)
+# JSON-based config store for custom tokens
 
 from __future__ import annotations
 
@@ -7,21 +7,12 @@ import os
 import threading
 from typing import Any, Dict, List, Optional, TypedDict, NotRequired
 
-
 APP_DIR_NAME = "XianWallet"
 CONFIG_FILE = "config.json"
 _LOCK = threading.RLock()
 
 
 class TokenConfig(TypedDict):
-    """
-    Token structure in the configuration.
-    - name: human-readable token name (e.g., "XIAN Currency")
-    - symbol: ticker (e.g., "XIAN")
-    - contract: on-chain identifier/contract (e.g., "currency" or "con_xwt")
-    - icon: short text or icon alias (e.g., "XN", "XWT")
-    - pinned: reserved for future use (e.g., highlight in UI)
-    """
     name: str
     symbol: str
     contract: str
@@ -31,9 +22,9 @@ class TokenConfig(TypedDict):
 
 def _app_data_dir() -> str:
     """
-    Return the app data directory (creating it if it doesn't exist).
-    Windows: %APPDATA%/XianWallet
-    macOS/Linux: ~/.local/share/XianWallet
+    Cross-platform application data directory for storing the config file.
+    Windows: %APPDATA%/XianWallet (fallback to ~ if APPDATA missing)
+    Linux/macOS: ~/.local/share/XianWallet
     """
     if os.name == "nt":
         base = os.getenv("APPDATA") or os.path.expanduser("~")
@@ -51,8 +42,8 @@ def get_config_path() -> str:
 
 def _default_tokens() -> List[TokenConfig]:
     """
-    Default tokens that the UI already shows.
-    Note: keep in sync with the UI.
+    Built-in default tokens always present in the list.
+    Users cannot remove these via the UI.
     """
     return [
         {
@@ -88,7 +79,7 @@ def _read_file(path: str) -> Optional[str]:
 
 def _atomic_write_json(path: str, data: Dict[str, Any]) -> None:
     """
-    Atomic write: write to a temporary file and replace the destination.
+    Atomically write JSON to the target path by writing to a temp file then replace.
     """
     tmp = path + ".tmp"
     payload = json.dumps(data, ensure_ascii=False, indent=2)
@@ -100,19 +91,19 @@ def _atomic_write_json(path: str, data: Dict[str, Any]) -> None:
     os.replace(tmp, path)
 
 
-def _normalize_token(t: Dict[str, Any]) -> Optional[TokenConfig]:
+def _normalize_token(t: Any) -> Optional[TokenConfig]:
     """
-    Validate/sanitize a token dictionary. Return None if invalid.
-    Minimum rules:
-      - name, symbol, contract: non-empty str
-      - reasonable lengths (<= 128)
+    Validate and normalize an incoming token object into a TokenConfig.
+    Enforces simple length limits and required fields.
     """
     try:
         name = str(t.get("name", "")).strip()
         symbol = str(t.get("symbol", "")).strip()
         contract = str(t.get("contract", "")).strip()
-        icon = str(t.get("icon", "")).strip()
+        icon_raw = t.get("icon", "")
+        icon = "" if icon_raw is None else str(icon_raw).strip()
         pinned = bool(t.get("pinned", False))
+
         if not name or not symbol or not contract:
             return None
         if (
@@ -122,14 +113,25 @@ def _normalize_token(t: Dict[str, Any]) -> Optional[TokenConfig]:
             or len(icon) > 128
         ):
             return None
-        return TokenConfig(
-            name=name, symbol=symbol, contract=contract, icon=icon, pinned=pinned
-        )
+
+        tok: TokenConfig = {
+            "name": name,
+            "symbol": symbol,
+            "contract": contract,
+        }
+        if icon:
+            tok["icon"] = icon
+        if pinned:
+            tok["pinned"] = True
+        return tok
     except Exception:
         return None
 
 
 def _ensure_unique_contracts(tokens: List[TokenConfig]) -> List[TokenConfig]:
+    """
+    Keep first occurrence for each unique contract.
+    """
     seen: set[str] = set()
     unique: List[TokenConfig] = []
     for t in tokens:
@@ -142,11 +144,11 @@ def _ensure_unique_contracts(tokens: List[TokenConfig]) -> List[TokenConfig]:
 
 def _merge_defaults(cfg: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Ensure default tokens exist if they're not already present.
+    Ensure all default tokens exist in the config tokens.
+    Does not override user modifications for existing entries.
     """
-    tokens: List[TokenConfig] = [
-        t for t in map(_normalize_token, cfg.get("tokens", [])) if t
-    ]
+    tokens_raw = cfg.get("tokens", [])
+    tokens: List[TokenConfig] = [t for t in map(_normalize_token, tokens_raw) if t]
     present = {t["contract"] for t in tokens}
     for d in _default_tokens():
         if d["contract"] not in present:
@@ -157,10 +159,8 @@ def _merge_defaults(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
 def load_config() -> Dict[str, Any]:
     """
-    Load configuration from disk.
-    - If it doesn't exist: create and return defaults.
-    - If corrupted/invalid: return defaults without overwriting the broken file.
-    - Always ensure defaults are included.
+    Load the config from disk, returning a valid config dictionary.
+    If the file is missing or corrupted, returns a default config (and attempts creation if missing).
     """
     path = get_config_path()
     with _LOCK:
@@ -188,6 +188,7 @@ def load_config() -> Dict[str, Any]:
             data["tokens"] = []
         if "ui" not in data or not isinstance(data.get("ui"), dict):
             data["ui"] = {}
+
         # Clean invalid tokens and merge defaults
         data["tokens"] = [t for t in map(_normalize_token, data["tokens"]) if t]
         data = _merge_defaults(data)
@@ -196,8 +197,7 @@ def load_config() -> Dict[str, Any]:
 
 def save_config(cfg: Dict[str, Any]) -> None:
     """
-    Save configuration to disk atomically.
-    - Normalize structure and avoid duplicates by 'contract'.
+    Persist the config to disk, normalizing tokens and ensuring defaults.
     """
     path = get_config_path()
     with _LOCK:
@@ -220,13 +220,22 @@ def get_tokens() -> List[TokenConfig]:
     """Return the list of tokens (includes defaults)."""
     cfg = load_config()
     tokens = cfg.get("tokens", [])
-    # Defensive copy
-    return [TokenConfig(**t) for t in tokens]
+    # Defensive copy of dicts to avoid external mutation
+    out: List[TokenConfig] = []
+    for t in tokens:
+        nt: TokenConfig = {"name": t.get("name", ""), "symbol": t.get("symbol", ""), "contract": t.get("contract", "")}
+        if t.get("icon", ""):
+            nt["icon"] = t.get("icon", "")
+        if t.get("pinned", False):
+            nt["pinned"] = True
+        out.append(nt)
+    return out
 
 
-def set_tokens(tokens: List[Dict[str, Any]]) -> None:
+def set_tokens(tokens: List[TokenConfig]) -> None:
     """
-    Replace the token list with the given one (defaults will be merged).
+    Replace the current tokens in config with the provided list.
+    Invalid tokens are filtered out.
     """
     cfg = load_config()
     cfg["tokens"] = [t for t in map(_normalize_token, tokens) if t]
@@ -294,8 +303,8 @@ def upsert_token(
 
 def remove_token(contract: str) -> bool:
     """
-    Remove a token by its 'contract'.
-    Returns True if it was removed; False if it didn't exist or if it's a default token.
+    Remove a token by contract. Returns True if removed, False if not found or default.
+    Default tokens cannot be removed.
     """
     contract = (contract or "").strip()
     if not contract:
@@ -312,6 +321,7 @@ def remove_token(contract: str) -> bool:
     cfg["tokens"] = new_tokens
     save_config(cfg)
     return True
+
 
 
 def is_default_contract(contract: str) -> bool:

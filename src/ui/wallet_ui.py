@@ -5,6 +5,7 @@ from typing import Optional, List, Dict, TypedDict, Union
 
 from src.storage import config_store, secure_store
 from src.core.wallet_manager import WalletManager
+from src.ui.system_tray import SystemTray
 from xian_py import Xian
 
 
@@ -34,10 +35,12 @@ def create_round_rect(canvas, x1, y1, x2, y2, r=12, fill="#1b2228", outline="#1b
     return items
 
 
+
 def lerp_color(c1: str, c2: str, t: float) -> str:
-    """Linear interpolate between two hex colors like #RRGGBB."""
+
     def h2i(h: str) -> int:
         return int(h, 16)
+
     r1, g1, b1 = h2i(c1[1:3]), h2i(c1[3:5]), h2i(c1[5:7])
     r2, g2, b2 = h2i(c2[1:3]), h2i(c2[3:5]), h2i(c2[5:7])
     r = int(r1 + (r2 - r1) * t)
@@ -86,7 +89,7 @@ class WalletUI(tk.Tk):
 
     def __init__(self):
         super().__init__()
-        self.title("Wallet UI - Tkinter")
+        self.title("Xian Portal Wallet")
         self.resizable(False, False)
         self.geometry(f"{self.WIDTH}x{self.HEIGHT}")
         self.configure(bg="#0b1417")
@@ -122,22 +125,15 @@ class WalletUI(tk.Tk):
             'edit': False,
         }
 
-        self.hit_areas: Dict[str, List[HitArea]] = {
-            'tabs': [],
-            'tokens': [],
-            'bottom': [],
-            'addr': [],
-            'copy': [],
-            'edit': [],
-        }
+        self.hit_areas: Dict[str, List[HitArea]] = dict.fromkeys(['tabs', 'tokens', 'bottom', 'addr', 'copy', 'edit'], [])
 
-        # Single canvas for custom drawing
-        self.canvas = tk.Canvas(self, width=self.WIDTH, height=self.HEIGHT, bg="#0b1417", highlightthickness=0)
-        self.canvas.pack(fill=tk.BOTH, expand=True)
 
-        # Bind shortcuts
-        self.bind_all("<Control-n>", self._create_wallet)
-        self.bind_all("<Control-i>", self._import_wallet)
+        # Initialize system tray
+
+        self.system_tray = SystemTray(window=self, on_show=self._on_tray_show, on_quit=self._on_tray_quit)
+        self.bind("<Unmap>", self._on_unmap); self.protocol("WM_DELETE_WINDOW", self._on_tray_quit)
+        self.canvas = tk.Canvas(self, width=self.WIDTH, height=self.HEIGHT, bg="#0b1417", highlightthickness=0); self.canvas.pack(fill=tk.BOTH, expand=True)
+        self.bind_all("<Control-n>", self._create_wallet); self.bind_all("<Control-i>", self._import_wallet)
         self.bind_all("<Control-u>", self._set_node_url)
         self.bind_all("<F5>", self._refresh_balances)
 
@@ -188,16 +184,58 @@ class WalletUI(tk.Tk):
         # Initial setup dialog on startup (skips if wallet already loaded)
         self.after(200, self._initial_setup)
 
+
+
+    def iconify(self):
+
+
+
+        try:
+            tk.Tk.iconify(self)
+        except Exception:
+
+            pass
+
+
+
+
+    def _on_tray_show(self):
+
+        # Refresh UI when restored from tray
+
+        self.draw_ui()
+
+
+
+
+    def _on_tray_quit(self):
+
+        # Clean up and quit
+        self.system_tray.destroy()
+
+        self.quit()
+
+
+
+    def _on_unmap(self, event):
+
+        try:
+            if self.state() == 'iconic':
+
+                self.system_tray.minimize_to_tray()
+
+        except Exception:
+
+            pass
+
+
+
     def draw_ui(self):
         c = self.canvas
         c.delete("all")
         # reset hit areas for fresh hover targeting
-        self.hit_areas['tabs'] = []
-        self.hit_areas['tokens'] = []
-        self.hit_areas['bottom'] = []
-        self.hit_areas['addr'] = []
-        self.hit_areas['copy'] = []
-        self.hit_areas['edit'] = []
+        for key in self.hit_areas:
+            self.hit_areas[key] = []
 
         # Background subtle vignette
         self._draw_vignette(c)
@@ -1018,7 +1056,7 @@ class WalletUI(tk.Tk):
                 return
         if self.current_wallet is not None:
             return
-        dlg = SetupDialog(self, default_node=self.node_url or "http://127.0.0.1:26657")
+        dlg = SetupDialog(self, default_node=self.node_url or "http://node.xian.org")
         self.wait_window(dlg.window)
         if not getattr(dlg, 'ok', False):
             return
@@ -1050,83 +1088,6 @@ class WalletUI(tk.Tk):
             messagebox.showwarning("Local save", f"Could not securely save the wallet: {e}")
         self.draw_ui()
         self._refresh_balances()
-
-
-class SetupDialog:
-    def __init__(self, master, default_node: str):
-        self.master = master
-        self.window = tk.Toplevel(master)
-        self.window.title("Configure Wallet")
-        self.window.configure(bg="#0b1417")
-        self.window.transient(master)
-        self.window.grab_set()
-
-        # State
-        self.ok = False
-        # Initialize variables
-        self.mode: str = 'create'
-        self.node_url: str = default_node
-        self.mnemonic: str = ''
-        self.private_key: str = ''
-        self.mode_var = tk.StringVar(value='create')
-        self.node_var = tk.StringVar(value=default_node)
-        self.mnemonic_text: tk.Text
-        self.priv_var = tk.StringVar()
-
-        # Layout
-        pad = 10
-        frm = tk.Frame(self.window, bg="#0b1417")
-        frm.pack(padx=pad, pady=pad)
-
-        tk.Label(frm, text="Node (http://host:port)", fg="#9ac6cc", bg="#0b1417").grid(row=0, column=0, sticky='w')
-        tk.Entry(frm, textvariable=self.node_var, width=34, bg="#0f1b1f", fg="#e8f6f7", insertbackground="#e8f6f7", relief='flat').grid(row=1, column=0, columnspan=3, sticky='we', pady=(0,10))
-
-        tk.Label(frm, text="Choose a method", fg="#9ac6cc", bg="#0b1417").grid(row=2, column=0, sticky='w')
-        tk.Radiobutton(frm, text="Create new", variable=self.mode_var, value='create', command=self._update_mode, bg="#0b1417", fg="#dbe9ea", selectcolor="#0f1b1f", activebackground="#0b1417").grid(row=3, column=0, sticky='w')
-        tk.Radiobutton(frm, text="Import mnemonic", variable=self.mode_var, value='mnemonic', command=self._update_mode, bg="#0b1417", fg="#dbe9ea", selectcolor="#0f1b1f", activebackground="#0b1417").grid(row=3, column=1, sticky='w')
-        tk.Radiobutton(frm, text="Import private key", variable=self.mode_var, value='priv', command=self._update_mode, bg="#0b1417", fg="#dbe9ea", selectcolor="#0f1b1f", activebackground="#0b1417").grid(row=3, column=2, sticky='w')
-
-        self.mnemonic_text = tk.Text(frm, height=4, width=44, bg="#0f1b1f", fg="#e8f6f7", insertbackground="#e8f6f7", relief='flat', wrap='word')
-        self.mnemonic_text.grid(row=4, column=0, columnspan=3, pady=(6,6))
-        self.mnemonic_text.insert('1.0', "Paste your mnemonic here (24 words)")
-        self.mnemonic_text.config(state='disabled')
-
-        self.priv_entry = tk.Entry(frm, textvariable=self.priv_var, width=44, bg="#0f1b1f", fg="#e8f6f7", insertbackground="#e8f6f7", relief='flat')
-        self.priv_entry.grid(row=5, column=0, columnspan=3, pady=(0,6))
-
-        btns = tk.Frame(frm, bg="#0b1417")
-        btns.grid(row=6, column=0, columnspan=3, pady=(8,0))
-        tk.Button(btns, text="Cancel", command=self.window.destroy, relief='raised', borderwidth=2, activebackground="#16252a", bg="#101b1f", fg="#dbe9ea").pack(side='right', padx=6)
-        tk.Button(btns, text="OK", command=self._accept, relief='raised', borderwidth=2, activebackground="#16252a", bg="#101b1f", fg="#dbe9ea").pack(side='right')
-
-        self._update_mode()
-
-    def _update_mode(self):
-        mode = self.mode_var.get()
-        self.mnemonic_text.config(state='normal' if mode == 'mnemonic' else 'disabled')
-        self.priv_entry.config(state='normal' if mode == 'priv' else 'disabled')
-
-    def _accept(self):
-        self.mode = self.mode_var.get()
-        self.node_url = self.node_var.get().strip()
-        self.mnemonic = ''
-        self.private_key = ''
-        if self.mode == 'mnemonic':
-            self.mnemonic = self.mnemonic_text.get('1.0', 'end').strip()
-            if not self.mnemonic:
-                messagebox.showerror("Missing mnemonic", "Paste your mnemonic to continue")
-                return
-        elif self.mode == 'priv':
-            self.private_key = self.priv_var.get().strip()
-            if not self.private_key:
-                messagebox.showerror("Missing key", "Paste your private key to continue")
-                return
-        if not self.node_url:
-            messagebox.showerror("Missing node", "Enter the node URL")
-            return
-        self.ok = True
-        self.window.destroy()
-
 
 class WalletSettingsDialog:
     def __init__(self, master: 'WalletUI'):
@@ -1162,266 +1123,167 @@ class WalletSettingsDialog:
         # Create/import section
         sec3 = tk.LabelFrame(root, text="Create / Import", fg="#9ac6cc", bg="#0b1417", labelanchor='n')
         sec3.configure(highlightbackground="#1a2a2f", highlightcolor="#1a2a2f")
-        sec3.pack(fill='x', pady=(0,4))
-        self.mode_var = tk.StringVar(value='create')
-        row = tk.Frame(sec3, bg="#0b1417")
-        row.pack(fill='x')
-        tk.Radiobutton(row, text="Create new", variable=self.mode_var, value='create', bg="#0b1417", fg="#dbe9ea", selectcolor="#0f1b1f", activebackground="#0b1417").pack(side='left')
-        tk.Radiobutton(row, text="Import mnemonic", variable=self.mode_var, value='mnemonic', bg="#0b1417", fg="#dbe9ea", selectcolor="#0f1b1f", activebackground="#0b1417").pack(side='left', padx=(14,0))
-        tk.Radiobutton(row, text="Import private key", variable=self.mode_var, value='priv', bg="#0b1417", fg="#dbe9ea", selectcolor="#0f1b1f", activebackground="#0b1417").pack(side='left', padx=(14,0))
+        sec3.pack(fill='x', pady=(0,10))
 
-        self.mnemonic_text = tk.Text(sec3, height=4, width=48, bg="#0f1b1f", fg="#e8f6f7", insertbackground="#e8f6f7", relief='flat', wrap='word')
-        self.mnemonic_text.pack(fill='x', pady=(6,6))
-        self.mnemonic_text.insert('1.0', "Paste your mnemonic here (24 words)")
-        self.priv_var = tk.StringVar()
-        self.priv_entry = tk.Entry(sec3, textvariable=self.priv_var, width=48, bg="#0f1b1f", fg="#e8f6f7", insertbackground="#e8f6f7", relief='flat')
-        self.priv_entry.pack(fill='x', pady=(0,6))
-
-        self._update_fields()
-        self.mode_var.trace_add('write', lambda *_: self._update_fields())
-
-        # Backup section
-        sec4 = tk.LabelFrame(root, text="Backup", fg="#9ac6cc", bg="#0b1417", labelanchor='n')
-        sec4.configure(highlightbackground="#1a2a2f", highlightcolor="#1a2a2f")
-        sec4.pack(fill='x', pady=(6,0))
-        tk.Label(sec4, text="Back up private key or mnemonic", fg="#9ac6cc", bg="#0b1417").pack(anchor='w')
-        btnrow = tk.Frame(sec4, bg="#0b1417")
-        btnrow.pack(fill='x', pady=(4,2))
-        tk.Button(btnrow, text="Show private key", command=self._backup_private, relief='raised', borderwidth=2, activebackground="#16252a", bg="#101b1f", fg="#dbe9ea").pack(side='left')
-        tk.Button(btnrow, text="Show mnemonic", command=self._backup_mnemonic, relief='raised', borderwidth=2, activebackground="#16252a", bg="#101b1f", fg="#dbe9ea").pack(side='left', padx=8)
-        tk.Button(btnrow, text="Export encrypted JSON", command=self._export_json_encrypted, relief='raised', borderwidth=2, activebackground="#16252a", bg="#101b1f", fg="#dbe9ea").pack(side='left', padx=8)
-        tk.Button(btnrow, text="Import encrypted JSON", command=self._import_json_encrypted, relief='raised', borderwidth=2, activebackground="#16252a", bg="#101b1f", fg="#dbe9ea").pack(side='left')
-
-        # Footer buttons
-        foot = tk.Frame(root, bg="#0b1417")
-        foot.pack(fill='x', pady=(8,0))
-        tk.Button(foot, text="Cancel", command=self.window.destroy, relief='raised', borderwidth=2, activebackground="#16252a", bg="#101b1f", fg="#dbe9ea").pack(side='right', padx=6)
-        tk.Button(foot, text="Apply", command=self._apply, relief='raised', borderwidth=2, activebackground="#16252a", bg="#101b1f", fg="#dbe9ea").pack(side='right')
-
-    def _update_fields(self):
-        mode = self.mode_var.get()
-        self.mnemonic_text.config(state='normal' if mode == 'mnemonic' else 'disabled')
-        self.priv_entry.config(state='normal' if mode == 'priv' else 'disabled')
+        tk.Button(sec3, text="Create New Wallet", command=self._create_wallet_button, relief='raised', borderwidth=2, activebackground="#16252a", bg="#101b1f", fg="#dbe9ea").pack(anchor='w', pady=(0,5))
+        tk.Button(sec3, text="Import Wallet", command=self._import_wallet_button, relief='raised', borderwidth=2, activebackground="#16252a", bg="#101b1f", fg="#dbe9ea").pack(anchor='w', pady=(0,5))
+        tk.Button(sec3, text="Show/Backup Keys", command=self._backup_keys_button, relief='raised', borderwidth=2, activebackground="#16252a", bg="#101b1f", fg="#dbe9ea").pack(anchor='w')
+        tk.Button(sec3, text="Backup to Encrypted JSON", command=self._backup_json_button, relief='raised', borderwidth=2, activebackground="#16252a", bg="#101b1f", fg="#dbe9ea").pack(anchor='w', pady=(0,5))
+        tk.Button(sec3, text="Restore from Encrypted JSON", command=self._restore_json_button, relief='raised', borderwidth=2, activebackground="#16252a", bg="#101b1f", fg="#dbe9ea").pack(anchor='w')
 
     def _save_node(self):
-        val = (self.node_var.get() or '').strip().rstrip('/')
-        if not val:
-            messagebox.showerror("Node", "Enter a valid URL")
-            return
-        self.master.node_url = val
-        # persist if wallet exists
-        if self.master.current_wallet is not None:
-            try:
-                if secure_store.requires_password():
-                    if not self.master._store_password:
-                        self.master._store_password = simpledialog.askstring("Security", "Wallet password", show='*')
-                    if self.master._store_password:
-                        secure_store.save_wallet(self.master.current_wallet, node_url=self.master.node_url, password=self.master._store_password)
-                else:
-                    secure_store.save_wallet(self.master.current_wallet, node_url=self.master.node_url)
-            except Exception:
-                pass
-        self.master.draw_ui()
-        self.master._refresh_balances()
+        url = self.node_var.get().strip().rstrip('/')
+        if url:
+            self.master.node_url = url
+            self.master._set_node_url()
+            messagebox.showinfo("Saved", "Node URL saved successfully.")
+        else:
+            messagebox.showerror("Error", "Invalid node URL.")
 
     def _clear_wallet(self):
-        if not self.master.current_wallet and not secure_store.store_exists():
-            return
-        if not messagebox.askyesno("Delete", "Delete the stored wallet from this device? This does not delete anything on-chain, only this computer."):
-            return
-        try:
-            secure_store.clear_wallet()
-        except Exception:
-            pass
-        self.master.current_wallet = None
-        self.master.address = "d53f0b...a21dcf"
-        self.master.total_balance_xian = 0.0
-        for t in self.master.tokens:
-            t["balance"] = None
-        self.master.draw_ui()
-        messagebox.showinfo("Done", "The wallet was removed from this device. You can now create or import another.")
-
-    def _apply(self):
-        mode = self.mode_var.get()
-        # Ensure node from entry is saved to master before actions
-        self._save_node()
-        try:
-            if mode == 'create':
-                info = self.master.wallet_manager.create_hd_wallet()
-                # show mnemonic
-                try:
-                    self.master.clipboard_clear()
-                    self.master.clipboard_append(info.mnemonic or "")
-                except Exception:
-                    pass
-                messagebox.showinfo("Mnemonic", info.mnemonic or "")
-            elif mode == 'mnemonic':
-                m = self.mnemonic_text.get('1.0', 'end').strip()
-                if not m:
-                    messagebox.showerror("Mnemonic", "Paste your mnemonic (24 words)")
-                    return
-                info = self.master.wallet_manager.import_hd_wallet(m)
-            else:
-                k = self.priv_var.get().strip()
-                if not k:
-                    messagebox.showerror("Private key", "Paste your private key (hex 64)")
-                    return
-                info = self.master.wallet_manager.import_private_key(k)
-        except Exception as e:
-            messagebox.showerror("Error", str(e))
-            return
-
-        # Persist securely
-        try:
-            if secure_store.requires_password():
-                if not self.master._store_password:
-                    p1 = simpledialog.askstring("Protect your wallet", "Create a password for this device", show='*')
-                    p2 = simpledialog.askstring("Confirm", "Repeat the password", show='*')
-                    if not p1 or p1 != p2:
-                        messagebox.showerror("Password", "Passwords do not match")
-                        return
-                    self.master._store_password = p1
-                secure_store.save_wallet(info, node_url=self.master.node_url, password=self.master._store_password)
-            else:
-                secure_store.save_wallet(info, node_url=self.master.node_url)
-        except Exception as e:
-            messagebox.showwarning("Local save", f"Could not securely save the wallet: {e}")
-
-        # Update master state
-        self.master.current_wallet = info
-        self.master.address = f"{info.public_key[:6]}...{info.public_key[-6:]}"
-        self.master.draw_ui()
-        self.master._refresh_balances()
-        self.window.destroy()
-
-    # ---- Backup helpers ----
-    def _require_auth(self) -> bool:
-        if not messagebox.askyesno("Warning", "You are about to display sensitive data (key/seed). Do you want to continue?"):
-            return False
-        # If session password exists, request it
-        if getattr(self.master, '_store_password', None):
-            pwd = simpledialog.askstring("Security", "Enter your password", parent=self.window, show='*')
-            if pwd != self.master._store_password:
-                messagebox.showerror("Password", "Incorrect password")
-                return False
-        return True
-
-    def _backup_private(self):
-        if not self.master.current_wallet:
-            messagebox.showinfo("No wallet", "No wallet loaded")
-            return
-        if not self._require_auth():
-            return
-        pk = self.master.current_wallet.private_key
-        self._show_export("Private Key", pk)
-
-    def _backup_mnemonic(self):
-        if not self.master.current_wallet or not self.master.current_wallet.mnemonic:
-            messagebox.showinfo("No mnemonic", "No mnemonic available for this wallet")
-            return
-        if not self._require_auth():
-            return
-        self._show_export("Mnemonic (seed)", self.master.current_wallet.mnemonic)
-
-    def _show_export(self, title: str, content: str):
-        win = tk.Toplevel(self.window)
-        win.title(title)
-        win.configure(bg="#0b1417")
-        win.transient(self.window)
-        pad = 10
-        frm = tk.Frame(win, bg="#0b1417")
-        frm.pack(padx=pad, pady=pad)
-        tk.Label(frm, text="Save this information in a secure place.", fg="#ffd7a1", bg="#0b1417").pack(anchor='w', pady=(0,6))
-        txt = tk.Text(frm, height=6, width=56, bg="#0f1b1f", fg="#e8f6f7", relief='flat', wrap='word')
-        txt.pack(fill='both', expand=True)
-        txt.insert('1.0', content)
-        txt.config(state='disabled')
-        row = tk.Frame(frm, bg="#0b1417")
-        row.pack(fill='x', pady=(8,0))
-        def _copy():
+        if messagebox.askyesno("Confirm", "Remove the wallet from this device? This will delete the local secure storage."):
             try:
-                self.master.clipboard_clear()
-                self.master.clipboard_append(content)
-                messagebox.showinfo("Copied", "Content copied to clipboard")
-                # Clear clipboard after 30s as a safety measure
-                try:
-                    self.master.after(30000, self.master.clipboard_clear)
-                except Exception:
-                    pass
+                secure_store.clear_wallet()
+                self.master.current_wallet = None
+                self.master.address = ""
+                self.master.draw_ui()
+                messagebox.showinfo("Removed", "Wallet removed from device.")
+                self.window.destroy()
+            except Exception as e:
+                messagebox.showerror("Error", f"Could not remove wallet: {e}")
+
+    def _create_wallet_button(self):
+        self.master._create_wallet()
+
+    def _import_wallet_button(self):
+        self.master._import_wallet()
+
+    def _backup_keys_button(self):
+        self.master._show_keys()
+
+    def _backup_json_button(self):
+        if not self.master.current_wallet:
+            messagebox.showerror("No wallet", "No wallet to backup.")
+            return
+        password = simpledialog.askstring("Backup Password", "Enter a password to encrypt the backup:", show='*')
+        if not password:
+            return
+        try:
+            json_blob = secure_store.create_portable_backup(self.master.current_wallet, node_url=self.master.node_url, password=password)
+            filename = filedialog.asksaveasfilename(defaultextension=".json", filetypes=[("JSON files", "*.json")])
+            if filename:
+                with open(filename, 'w') as f:
+                    f.write(json_blob)
+                messagebox.showinfo("Backup", "Wallet backed up successfully to encrypted JSON file.")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to create backup: {e}")
+
+    def _restore_json_button(self):
+        filename = filedialog.askopenfilename(defaultextension=".json", filetypes=[("JSON files", "*.json")])
+        if not filename:
+            return
+        password = simpledialog.askstring("Backup Password", "Enter the password used for the backup:", show='*')
+        if not password:
+            return
+        try:
+            with open(filename, 'r') as f:
+                json_blob = f.read()
+            info, node_url = secure_store.restore_portable_backup(json_blob, password=password)
+            self.master.current_wallet = info
+            self.master.address = f"{info.public_key[:6]}...{info.public_key[-6:]}"
+            if node_url:
+                self.master.node_url = node_url
+            try:
+                secure_store.save_wallet(info, node_url=self.master.node_url)
             except Exception:
                 pass
-        def _save_file():
-            path = filedialog.asksaveasfilename(title="Save backup", defaultextension=".txt", filetypes=[("Text", "*.txt"), ("All", "*.*")])
-            if path:
-                try:
-                    with open(path, 'w', encoding='utf-8') as f:
-                        f.write(content)
-                    messagebox.showinfo("Saved", "Backup saved successfully")
-                except Exception as e:
-                    messagebox.showerror("Error", str(e))
-        tk.Button(row, text="Copy", command=_copy, relief='raised', borderwidth=2, activebackground="#16252a", bg="#101b1f", fg="#dbe9ea").pack(side='right')
-        tk.Button(row, text="Save as...", command=_save_file, relief='raised', borderwidth=2, activebackground="#16252a", bg="#101b1f", fg="#dbe9ea").pack(side='right', padx=6)
-        tk.Button(row, text="Close", command=win.destroy, relief='raised', borderwidth=2, activebackground="#16252a", bg="#101b1f", fg="#dbe9ea").pack(side='left')
-
-    def _export_json_encrypted(self):
-        if not self.master.current_wallet:
-            messagebox.showinfo("No wallet", "No wallet loaded")
-            return
-        p1 = simpledialog.askstring("Export JSON", "Create a password for the backup", parent=self.window, show='*')
-        p2 = simpledialog.askstring("Confirm", "Repeat the password", parent=self.window, show='*')
-        if not p1 or p1 != p2:
-            messagebox.showerror("Password", "Passwords do not match")
-            return
-        try:
-            blob = secure_store.create_portable_backup(self.master.current_wallet, node_url=self.master.node_url, password=p1)
+            self.master.draw_ui()
+            self.master._refresh_balances()
+            messagebox.showinfo("Restore", "Wallet restored successfully from backup.")
+            self.window.destroy()
         except Exception as e:
-            messagebox.showerror("Error", str(e))
-            return
-        path = filedialog.asksaveasfilename(title="Save encrypted backup", defaultextension=".xwbackup", filetypes=[("Xian Wallet Backup","*.xwbackup"), ("JSON","*.json"), ("All","*.*")])
-        if path:
-            try:
-                with open(path, 'w', encoding='utf-8') as f:
-                    f.write(blob)
-                messagebox.showinfo("Saved", "Encrypted backup saved successfully")
-            except Exception as e:
-                messagebox.showerror("Error", str(e))
-
-    def _import_json_encrypted(self):
-        path = filedialog.askopenfilename(title="Import encrypted backup", filetypes=[("Xian Wallet Backup","*.xwbackup"), ("JSON","*.json"), ("All","*.*")])
-        if not path:
-            return
-        pwd = simpledialog.askstring("Import JSON", "Enter the backup password", parent=self.window, show='*')
-        if not pwd:
-            return
-        try:
-            with open(path, 'r', encoding='utf-8') as f:
-                blob = f.read()
-            info, node = secure_store.restore_portable_backup(blob, password=pwd)
-        except Exception as e:
-            messagebox.showerror("Error", f"Could not import: {e}")
-            return
-        try:
-            if secure_store.requires_password():
-                if not self.master._store_password:
-                    dp1 = simpledialog.askstring("Protect your device", "Create a password for this device", parent=self.window, show='*')
-                    dp2 = simpledialog.askstring("Confirm", "Repeat the password", parent=self.window, show='*')
-                    if not dp1 or dp1 != dp2:
-                        messagebox.showerror("Password", "Passwords do not match")
-                        return
-                    self.master._store_password = dp1
-                secure_store.save_wallet(info, node_url=node or self.master.node_url, password=self.master._store_password)
-            else:
-                secure_store.save_wallet(info, node_url=node or self.master.node_url)
-        except Exception as e:
-            messagebox.showwarning("Local save", f"Could not securely save the wallet: {e}")
-        self.master.current_wallet = info
-        if node:
-            self.master.node_url = node
-        self.master.address = f"{info.public_key[:6]}...{info.public_key[-6:]}"
-        self.master.draw_ui()
-        self.master._refresh_balances()
+            messagebox.showerror("Error", f"Failed to restore from backup: {e}")
 
 
-if __name__ == "__main__":
-    app = WalletUI()
-    app.mainloop()
+class SetupDialog:
+    def __init__(self, master, default_node="http://127.0.0.1:26657"):
+        self.master = master
+        self.window = tk.Toplevel(master)
+        self.window.title("Setup Wallet")
+        self.window.configure(bg="#0b1417")
+        self.window.transient(master)
+        self.window.grab_set()
+
+        self.ok = False
+        self.mode: Optional[str] = None
+        self.mnemonic: str = ""
+        self.private_key: str = ""
+        self.node_url = default_node
+
+        pad = 12
+        root = tk.Frame(self.window, bg="#0b1417")
+        root.pack(padx=pad, pady=pad)
+
+        # Node section
+        sec_node = tk.LabelFrame(root, text="Xian Node", fg="#9ac6cc", bg="#0b1417", labelanchor='n')
+        sec_node.configure(highlightbackground="#1a2a2f", highlightcolor="#1a2a2f")
+        sec_node.pack(fill='x', pady=(0,10))
+        tk.Label(sec_node, text="Node URL (http://host:port)", fg="#9ac6cc", bg="#0b1417").pack(anchor='w')
+        self.node_var = tk.StringVar(value=default_node)
+        node_entry = tk.Entry(sec_node, textvariable=self.node_var, width=40, bg="#0f1b1f", fg="#e8f6f7", insertbackground="#e8f6f7", relief='flat')
+        node_entry.pack(fill='x', pady=(2,6))
+
+        # Mode section
+        sec_mode = tk.LabelFrame(root, text="Wallet Setup", fg="#9ac6cc", bg="#0b1417", labelanchor='n')
+        sec_mode.configure(highlightbackground="#1a2a2f", highlightcolor="#1a2a2f")
+        sec_mode.pack(fill='x', pady=(0,10))
+
+        self.mode_var = tk.StringVar(value="create")
+        tk.Radiobutton(sec_mode, text="Create New Wallet", variable=self.mode_var, value="create", fg="#dbe9ea", bg="#0b1417", selectcolor="#1a2a2f", activebackground="#0b1417", activeforeground="#dbe9ea").pack(anchor='w')
+        tk.Radiobutton(sec_mode, text="Import from Mnemonic", variable=self.mode_var, value="mnemonic", fg="#dbe9ea", bg="#0b1417", selectcolor="#1a2a2f", activebackground="#0b1417", activeforeground="#dbe9ea").pack(anchor='w')
+        tk.Radiobutton(sec_mode, text="Import from Private Key", variable=self.mode_var, value="priv", fg="#dbe9ea", bg="#0b1417", selectcolor="#1a2a2f", activebackground="#0b1417", activeforeground="#dbe9ea").pack(anchor='w')
+
+        # Mnemonic/Private Key entry
+        tk.Label(sec_mode, text="Mnemonic (24 words) or Private Key:", fg="#9ac6cc", bg="#0b1417").pack(anchor='w')
+        self.text_var = tk.Text(sec_mode, height=4, width=50, bg="#0f1b1f", fg="#e8f6f7", insertbackground="#e8f6f7", relief='flat')
+        self.text_var.pack(fill='x', pady=(2,6))
+
+        # Buttons
+        btn_frame = tk.Frame(sec_mode, bg="#0b1417")
+        btn_frame.pack(fill='x')
+        tk.Button(btn_frame, text="OK", command=self._on_ok, relief='raised', borderwidth=2, activebackground="#16252a", bg="#101b1f", fg="#dbe9ea").pack(side='right', padx=(5,0))
+        tk.Button(btn_frame, text="Cancel", command=self._on_cancel, relief='raised', borderwidth=2, activebackground="#16252a", bg="#101b1f", fg="#dbe9ea").pack(side='right')
+
+    def _on_ok(self):
+        mode = self.mode_var.get()
+        text = self.text_var.get("1.0", tk.END).strip()
+        node_url = self.node_var.get().strip().rstrip('/')
+
+        if mode == "create":
+            # For create, mnemonic is not needed
+            pass
+        elif mode == "mnemonic":
+            if not text:
+                messagebox.showerror("Error", "Mnemonic is required for import.")
+                return
+            self.mnemonic = text
+        elif mode == "priv":
+            if not text:
+                messagebox.showerror("Error", "Private key is required for import.")
+                return
+        else:
+            return
+
+        # Assign validated values
+        if mode == "mnemonic":
+            self.mnemonic = text
+        elif mode == "priv":
+            self.private_key = text
+
+        self.mode = mode
+        self.node_url = node_url
+        self.ok = True
+        self.window.destroy()
+
+    def _on_cancel(self):
+        self.window.destroy()

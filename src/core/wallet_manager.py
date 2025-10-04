@@ -1,14 +1,5 @@
-"""
-Wallet creation/import helpers based on xian-py.
 
-This wraps xian_py.wallet APIs to provide a simple interface for:
- - Creating a new HD wallet (24-word mnemonic) and deriving an ED25519 key
- - Importing an HD wallet from mnemonic
- - Importing a raw private key (hex)
 
-Note: xian-py generates Ed25519 keys by default. Ethereum (secp256k1)
-support exists in xian-py but is not required here.
-"""
 from __future__ import annotations
 
 from dataclasses import dataclass
