@@ -6,48 +6,9 @@ from typing import Optional, List, Dict, TypedDict, Union
 from src.storage import config_store, secure_store
 from src.core.wallet_manager import WalletManager
 from src.ui.system_tray import SystemTray
+from src.ui.token_details_screen import TokenDetailsScreen
+from src.ui.ui_utils import create_round_rect, lerp_color
 from xian_py import Xian
-
-
-# Simple rounded rectangle helper using arcs + rectangles
-def create_round_rect(canvas, x1, y1, x2, y2, r=12, fill="#1b2228", outline="#1b2228", width=1):
-    if r <= 0:
-        return canvas.create_rectangle(x1, y1, x2, y2, fill=fill, outline=outline, width=width)
-    items = []
-    # Four arcs
-    items.append(canvas.create_arc(x1, y1, x1 + 2 * r, y1 + 2 * r, start=90, extent=90, style=tk.PIESLICE, outline=outline, width=width, fill=fill))
-    items.append(canvas.create_arc(x2 - 2 * r, y1, x2, y1 + 2 * r, start=0, extent=90, style=tk.PIESLICE, outline=outline, width=width, fill=fill))
-    items.append(canvas.create_arc(x1, y2 - 2 * r, x1 + 2 * r, y2, start=180, extent=90, style=tk.PIESLICE, outline=outline, width=width, fill=fill))
-    items.append(canvas.create_arc(x2 - 2 * r, y2 - 2 * r, x2, y2, start=270, extent=90, style=tk.PIESLICE, outline=outline, width=width, fill=fill))
-    # Center rectangles to stitch corners
-    items.append(canvas.create_rectangle(x1 + r, y1, x2 - r, y2, fill=fill, outline=fill))
-    items.append(canvas.create_rectangle(x1, y1 + r, x2, y2 - r, fill=fill, outline=fill))
-    # Outline path (approximate) for nicer border
-    if outline and width:
-        canvas.create_line(x1 + r, y1, x2 - r, y1, fill=outline, width=width)
-        canvas.create_line(x2, y1 + r, x2, y2 - r, fill=outline, width=width)
-        canvas.create_line(x1 + r, y2, x2 - r, y2, fill=outline, width=width)
-        canvas.create_line(x1, y1 + r, x1, y2 - r, fill=outline, width=width)
-        canvas.create_arc(x1, y1, x1 + 2 * r, y1 + 2 * r, start=90, extent=90, style=tk.ARC, outline=outline, width=width)
-        canvas.create_arc(x2 - 2 * r, y1, x2, y1 + 2 * r, start=0, extent=90, style=tk.ARC, outline=outline, width=width)
-        canvas.create_arc(x1, y2 - 2 * r, x1 + 2 * r, y2, start=180, extent=90, style=tk.ARC, outline=outline, width=width)
-        canvas.create_arc(x2 - 2 * r, y2 - 2 * r, x2, y2, start=270, extent=90, style=tk.ARC, outline=outline, width=width)
-    return items
-
-
-
-def lerp_color(c1: str, c2: str, t: float) -> str:
-
-    def h2i(h: str) -> int:
-        return int(h, 16)
-
-    r1, g1, b1 = h2i(c1[1:3]), h2i(c1[3:5]), h2i(c1[5:7])
-    r2, g2, b2 = h2i(c2[1:3]), h2i(c2[3:5]), h2i(c2[5:7])
-    r = int(r1 + (r2 - r1) * t)
-    g = int(g1 + (g2 - g1) * t)
-    b = int(b1 + (b2 - b1) * t)
-    return f"#{r:02x}{g:02x}{b:02x}"
-
 
 class TokenRow(TypedDict):
     name: str
@@ -650,6 +611,15 @@ class WalletUI(tk.Tk):
         if any(r['x1'] <= x <= r['x2'] and r['y1'] <= y <= r['y2'] for r in self.hit_areas.get('copy', [])):
             self._copy_address(None)
             return
+
+        # Token clicks
+        for r in self.hit_areas.get('tokens', []):
+            if r['x1'] <= x <= r['x2'] and r['y1'] <= y <= r['y2']:
+                token_idx = r.get('idx')
+                if token_idx is not None and 0 <= token_idx < len(self.tokens):
+                    token_data = self.tokens[token_idx]
+                    TokenDetailsScreen(self, token_data)
+                return
 
     def _open_settings_dialog(self, _evt=None):
         WalletSettingsDialog(self)
