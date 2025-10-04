@@ -1,0 +1,95 @@
+# Xian Portal - Git Ignore File
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.whl
+.Python
+
+# Virtual Environments
+venv/
+env/
+ENV/
+.venv
+
+# IDEs and Editors
+# .vscode/  # Uncomment if you don't want to share VS Code settings
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Wallet and Sensitive Data
+wallet_store.bin
+*.key
+*.pem
+*.backup
+_tmp_*
+
+# Logs and Databases
+*.log
+*.db
+*.sqlite
+*.sqlite3
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# OS Files
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Temporary Files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# Documentation builds
+docs/_build/
+site/
+
+# Environment Variables
+.env
+.env.local
+.env.*.local
+
+# Package Manager
+pip-log.txt
+pip-delete-this-directory.txt
+.installed.cfg
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+*.ipynb
+
+# Distribution / packaging
+.Python
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/

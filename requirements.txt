@@ -1,0 +1,31 @@
+# Xian Portal - Project Dependencies
+# Python 3.10+ required
+
+# Core Xian Network Library
+# Install directly from GitHub repository
+git+https://github.com/xian-network/xian-py.git
+
+# Security & Encryption
+keyring>=24.0.0          # Cross-platform secure credential storage
+cryptography>=41.0.0     # AES-GCM encryption for wallet data
+
+# GUI Framework
+# tkinter is included with Python standard library on most platforms
+# On Linux, you may need to install: python3-tk
+
+# Optional Dependencies
+# Uncomment if needed for specific features
+
+# Development & Testing
+# pytest>=7.4.0
+# pytest-cov>=4.1.0
+# black>=23.0.0
+# flake8>=6.0.0
+# mypy>=1.5.0
+
+# Notes:
+# - Install with: pip install -r requirements.txt
+# - For development: pip install -r requirements.txt -e .
+# - Linux users: Ensure gnome-keyring or similar secret service is running
+# - macOS: Uses native Keychain (no additional setup needed)
+# - Windows: Uses DPAPI and Credential Locker (no additional setup needed)
