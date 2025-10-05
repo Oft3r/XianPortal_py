@@ -1,6 +1,9 @@
 import tkinter as tk
 from tkinter import messagebox, simpledialog
 from typing import TYPE_CHECKING, Any
+import qrcode
+from qrcode.constants import ERROR_CORRECT_H
+from PIL import Image, ImageTk
 
 if TYPE_CHECKING:
     from .wallet_ui import WalletUI, TokenRow
@@ -207,21 +210,142 @@ class TokenDetailsScreen:
         messagebox.showinfo("Send", f"Send {self.token_data['symbol']} functionality not yet implemented.")
 
     def _receive_token(self):
-        # Show receiving address
+        # Show receiving address with QR code
         if self.master.current_wallet:
             address = self.master.current_wallet.public_key
+
             try:
                 self.master.clipboard_clear()
                 self.master.clipboard_append(address)
             except Exception:
                 pass
-            messagebox.showinfo("Receive Address", f"Your receiving address:\n{address}\n\n(Copied to clipboard)")
+
+            # Create QR code popup
+            popup = tk.Toplevel(self.master)
+            popup.title("Receive Token")
+            # Window size will be set dynamically after QR is generated
+            popup.update_idletasks()
+            popup.configure(bg="#0b1417")
+            popup.resizable(False, False)
+
+            # Center the popup
+            popup.transient(self.master)
+            popup.grab_set()
+
+            # Header with token info
+            header_frame = tk.Frame(popup, bg="#0b1417")
+            header_frame.pack(fill=tk.X, pady=(20, 10))
+
+            token_icon = tk.Label(header_frame, text=self.token_data.get("icon", "T"),
+                                 font=("Segoe UI", 20, "bold"), fg="#e8f6f7", bg="#0b1417")
+            token_icon.pack(side=tk.LEFT, padx=(20, 10))
+
+            header_text = tk.Frame(header_frame, bg="#0b1417")
+            header_text.pack(side=tk.LEFT)
+            token_name = tk.Label(header_text, text=f"Receive {self.token_data['symbol']}",
+                                 font=("Segoe UI", 14, "bold"), fg="#dbe9ea", bg="#0b1417")
+            token_name.pack(anchor="w")
+            subtitle = tk.Label(header_text, text="Scan QR code or copy address",
+                               font=("Segoe UI", 9), fg="#8aa4aa", bg="#0b1417")
+            subtitle.pack(anchor="w")
+
+            # QR Code section with maximum contrast (compact sizing)
+            qr_frame = tk.Frame(popup, bg="#ffffff", relief="solid", bd=2)  # White background for contrast
+            qr_frame.pack(pady=(8, 16), padx=12)
+
+            # Generate QR code with high contrast (black/white)
+            # Smaller box_size and a standard quiet zone (border=4) keep it compact and scannable
+            qr = qrcode.QRCode(
+                version=1,
+                box_size=6,   # Reduced size per module
+                border=4,     # Standard quiet zone
+                error_correction=ERROR_CORRECT_H
+            )
+            qr.add_data(address)
+            qr.make(fit=True)
+
+            # Create QR image with maximum contrast
+            qr_image = qr.make_image(fill_color="black", back_color="white")
+            # Ensure we have a PIL Image for Tk
+            pil_img = qr_image.convert("RGB") if hasattr(qr_image, "convert") else qr_image  # type: ignore[assignment]
+
+            # Convert to PhotoImage
+            qr_photo: ImageTk.PhotoImage = ImageTk.PhotoImage(pil_img)  # type: ignore
+
+            # Display QR code (keep reference on the instance to avoid GC)
+            qr_label = tk.Label(qr_frame, image=qr_photo, bg="white")  # type: ignore
+            self._qr_photo_ref = qr_photo
+            qr_label.pack(padx=8, pady=8)
+
+            # After rendering QR, adjust popup size to fit content exactly
+            popup.update_idletasks()
+            # Compute desired width/height based on frame plus padding (more compact)
+            total_width = max(320, qr_frame.winfo_reqwidth() + 40)
+            total_height = qr_frame.winfo_reqheight() + 220  # header + address + buttons
+            popup.geometry(f"{total_width}x{total_height}")
+
+            # Address section - show full address clearly
+            addr_frame = tk.Frame(popup, bg="#0b1417")
+            addr_frame.pack(fill=tk.X, padx=20, pady=(0, 20))
+
+            addr_title = tk.Label(addr_frame, text="Wallet Address",
+                                 font=("Segoe UI", 12, "bold"), fg="#dbe9ea", bg="#0b1417")
+            addr_title.pack(anchor="w", pady=(0, 5))
+
+            addr_subtitle = tk.Label(addr_frame, text="Click to copy • Right-click for options",
+                                    font=("Segoe UI", 9), fg="#8aa4aa", bg="#0b1417")
+            addr_subtitle.pack(anchor="w", pady=(0, 10))
+
+            # Address display in a single-line entry for easy copying
+            addr_var = tk.StringVar(value=address)
+            addr_entry = tk.Entry(addr_frame, textvariable=addr_var, font=("Courier New", 10),
+                                   bg="#0e181b", fg="#dbe9ea", relief="solid", bd=1,
+                                   insertbackground="#dbe9ea")
+            addr_entry.pack(fill=tk.X, ipady=8)
+            # Select-all on focus for quick copy
+            def on_focus_in(_):
+                addr_entry.selection_range(0, tk.END)
+            addr_entry.bind("<FocusIn>", on_focus_in)
+            # Right-click context menu
+            def show_context_menu(event):
+                menu = tk.Menu(popup, tearoff=0, bg="#0f1b1f", fg="#dbe9ea",
+                               activebackground="#6bb6e8", activeforeground="#0f1f2a")
+                menu.add_command(label="Copy Address",
+                                 command=lambda: self._copy_address(address, popup=None))
+                menu.add_command(label="Select All",
+                                 command=lambda: addr_entry.selection_range(0, tk.END))
+                menu.post(event.x_root, event.y_root)
+            addr_entry.bind("<Button-3>", show_context_menu)
+            # Double-click to copy
+            addr_entry.bind("<Double-Button-1>", lambda _e: self._copy_address(address, popup=None))
+
+            # Copy button
+            copy_frame = tk.Frame(popup, bg="#0b1417")
+            copy_frame.pack(fill=tk.X, padx=20, pady=(0, 20))
+
+            copy_btn = tk.Button(copy_frame, text="📋 Copy Address",
+                                command=lambda: self._copy_address(address, popup),
+                                font=("Segoe UI", 12, "bold"), bg="#6bb6e8",
+                                fg="#0f1f2a", relief="flat", height=2,
+                                activebackground="#5ba0d0", activeforeground="#0f1f2a")
+            copy_btn.pack(fill=tk.X)
+
         else:
             messagebox.showwarning("No Wallet", "No wallet loaded.")
 
     def _swap_token(self):
         # Placeholder for swap functionality
         messagebox.showinfo("Swap", f"Swap {self.token_data['symbol']} functionality not yet implemented.")
+
+    def _copy_address(self, address: str, popup: tk.Toplevel | None):
+        try:
+            self.master.clipboard_clear()
+            self.master.clipboard_append(address)
+            messagebox.showinfo("Copied", "Address copied to clipboard!")
+        except Exception:
+            messagebox.showerror("Error", "Failed to copy address to clipboard.")
+        if popup is not None:
+            popup.destroy()
 
     def _copy_contract(self):
         contract = self.token_data.get("contract", "")

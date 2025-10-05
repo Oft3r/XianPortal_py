@@ -631,11 +631,28 @@ class WalletUI(tk.Tk):
 
         # Address + copy
         if any(r['x1'] <= x <= r['x2'] and r['y1'] <= y <= r['y2'] for r in self.hit_areas.get('addr', [])):
-            self._show_keys()
+            # Show full public address in a dialog with copy option
+            if self.current_wallet:
+                full_addr = self.current_wallet.public_key
+                try:
+                    self.clipboard_clear()
+                    self.clipboard_append(full_addr)
+                except Exception:
+                    pass
+                messagebox.showinfo("Wallet Address", f"Address copied to clipboard:\n{full_addr}")
+            else:
+                messagebox.showwarning("No Wallet", "No wallet loaded.")
             return
 
         if any(r['x1'] <= x <= r['x2'] and r['y1'] <= y <= r['y2'] for r in self.hit_areas.get('copy', [])):
-            self._copy_address(None)
+            # Copy full address, not the shortened one
+            if self.current_wallet:
+                self.clipboard_clear()
+                self.clipboard_append(self.current_wallet.public_key)
+                self.update()
+                messagebox.showinfo("Copied", f"Address copied:\n{self.current_wallet.public_key}")
+            else:
+                messagebox.showwarning("No Wallet", "No wallet loaded.")
             return
 
         # Token clicks
