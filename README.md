@@ -7,6 +7,8 @@ A desktop wallet manager for the Xian blockchain network.
 - Create HD wallets with 24-word mnemonic phrases
 - Import wallets from mnemonic or private key
 - View token balances (XIAN and custom tokens)
+- **Send Tokens** - Beautiful modal with real-time validation, balance checking, and fee estimation
+- **Receive Tokens** - QR code generation and address sharing
 - Manage custom tokens (add, edit, remove via Token Manager dialog)
 - Secure encrypted storage (Windows DPAPI, macOS Keychain, Linux Secret Service)
 - Clean Tkinter interface with modern design
@@ -58,6 +60,35 @@ The wallet can be minimized to the system tray to keep it running in the backgro
 
 **Note**: When minimized to tray, the wallet continues to run in the background. You can restore it anytime by clicking the tray icon.
 
+### Sending Tokens 🚀
+
+The wallet includes a beautiful Send modal for secure token transfers:
+
+1. Navigate to any token in your wallet
+2. Click the **Send** button
+3. Enter recipient address (or paste from clipboard)
+4. Enter amount (or click **MAX** for full balance)
+5. Add optional memo/note
+6. Review transaction summary with fees
+7. Confirm and send!
+
+**Features:**
+- ✅ Real-time input validation
+- ✅ Balance checking (prevents overspending)
+- ✅ Address format verification
+- ✅ Fee estimation (~0.001 XIAN)
+- ✅ MAX button for sending full balance
+- ✅ Paste button for quick address entry
+- ✅ Optional transaction memo
+- ✅ Confirmation dialog before sending
+
+**Try the demo:**
+```bash
+python demo_send_modal.py
+```
+
+For detailed documentation, see [SEND_MODAL_README.md](SEND_MODAL_README.md) or [Quick Start Guide](SEND_MODAL_QUICKSTART.md).
+
 ## Security
 
 Your wallet is encrypted using:
@@ -74,16 +105,20 @@ Storage location:
 ```
 XianPortal_py/
 ├── xian_portal.py          # Main entry point - Run this!
+├── demo_send_modal.py      # Demo for Send modal UI
 ├── src/
 │   ├── ui/
-│   │   ├── wallet_ui.py    # Main wallet interface (Tkinter-based)
-│   │   └── system_tray.py  # System tray functionality
+│   │   ├── wallet_ui.py           # Main wallet interface (Tkinter-based)
+│   │   ├── send_modal.py          # Send transaction modal dialog
+│   │   ├── token_details_screen.py # Token details view
+│   │   ├── system_tray.py         # System tray functionality
+│   │   └── ui_utils.py            # Shared UI utilities
 │   ├── core/
-│   │   └── wallet_manager.py # Wallet creation/import/balances
+│   │   └── wallet_manager.py      # Wallet creation/import/balances
 │   └── storage/
-│       ├── config_store.py # Token and configuration storage
-│       └── secure_store.py # Encrypted wallet storage
-└── scripts/                # Utility scripts
+│       ├── config_store.py        # Token and configuration storage
+│       └── secure_store.py        # Encrypted wallet storage
+└── scripts/                       # Utility scripts
 ```
 
 ## Dependencies

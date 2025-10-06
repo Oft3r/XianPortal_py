@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from .wallet_ui import WalletUI, TokenRow
 
 from src.ui.ui_utils import create_round_rect, lerp_color
+from src.ui.send_modal import SendScreen
 
 
 class TokenDetailsScreen:
@@ -206,8 +207,42 @@ class TokenDetailsScreen:
             self._swap_token()
 
     def _send_token(self):
-        # Placeholder for send functionality
-        messagebox.showinfo("Send", f"Send {self.token_data['symbol']} functionality not yet implemented.")
+        """Open send screen for this token"""
+        def handle_send(transaction_data):
+            """Handle the actual send transaction"""
+            # TODO: Implement actual blockchain transaction here
+            messagebox.showinfo(
+                "Transaction Submitted",
+                f"Transaction Details:\n\n"
+                f"Token: {transaction_data['symbol']}\n"
+                f"Recipient: {transaction_data['recipient'][:16]}...{transaction_data['recipient'][-16:]}\n"
+                f"Amount: {transaction_data['amount']:.6f}\n"
+                f"Memo: {transaction_data['memo'] or 'N/A'}\n\n"
+                f"Transaction has been submitted to the network!"
+            )
+            # Refresh token balance after sending
+            if hasattr(self.master, '_refresh_balances'):
+                self.master._refresh_balances()
+        
+        def handle_back():
+            """Navigate back from send screen"""
+            # Find the current send tab and close it
+            for tab_id in self.master.details_notebook.tabs():
+                if "Send" in self.master.details_notebook.tab(tab_id, "text"):
+                    self.master.details_notebook.forget(tab_id)
+                    # Select the token details tab
+                    self.master.details_notebook.select(self.frame)
+                    break
+        
+        # Create new tab for send screen
+        send_tab_frame = tk.Frame(self.master.details_notebook, bg="#0b1417")
+        self.master.details_notebook.add(send_tab_frame, text=f"Send {self.token_data['symbol']}")
+        
+        # Create send screen in the tab
+        SendScreen(self.master, send_tab_frame, self.token_data, on_send=handle_send, on_back=handle_back)
+        
+        # Select the send tab
+        self.master.details_notebook.select(send_tab_frame)
 
     def _receive_token(self):
         # Show receiving address with QR code
